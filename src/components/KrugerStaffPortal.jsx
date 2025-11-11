@@ -1,3 +1,4 @@
+// src/components/KrugerStaffPortal.jsx
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -7,12 +8,21 @@ import { Badge } from './ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { animalSightings, krugerGates } from '../lib/mockData';
-import { Binoculars, Plus, Edit, Trash2, MapPin, Users, Eye, Activity, AlertCircle, CheckCircle, DoorOpen } from 'lucide-react';
+import { Binoculars, Plus, Edit, Trash2, MapPin, Users, Eye, Activity, AlertCircle, CheckCircle, DoorOpen, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAnimalSightings } from '../hooks/useAnimalSightings';
 
 export function KrugerStaffPortal() {
-  const [sightings, setSightings] = useState(animalSightings);
+  const { 
+    sightings, 
+    loading, 
+    error, 
+    createSighting, 
+    updateSighting, 
+    deleteSighting,
+    refetch 
+  } = useAnimalSightings();
+
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [currentSighting, setCurrentSighting] = useState(null);
@@ -58,6 +68,17 @@ export function KrugerStaffPortal() {
     'Letaba River'
   ];
 
+  const krugerGates = [
+    "Paul Kruger Gate",
+    "Numbi Gate",
+    "Phabeni Gate",
+    "Malelane Gate",
+    "Crocodile Bridge",
+    "Orpen Gate",
+    "Phalaborwa Gate",
+    "Punda Maria Gate"
+  ];
+
   const resetForm = () => {
     setSpecies('');
     setLocation('');
@@ -67,29 +88,29 @@ export function KrugerStaffPortal() {
     setStatus('recent');
   };
 
-  const handleAddSighting = () => {
+  const handleAddSighting = async () => {
     if (!species || !location || !gate) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    const newSighting = {
-      id: `a${sightings.length + 1}`,
-      species,
-      location,
-      gate,
-      time: 'Just now',
-      image: animalSightings[0].image,
-      status,
-      coordinates: { lat: -24.9947, lng: 31.5972 },
-      count: parseInt(count),
-      confidence: parseInt(confidence)
-    };
+    try {
+      await createSighting({
+        species,
+        location,
+        gate,
+        count: parseInt(count),
+        confidence: parseInt(confidence),
+        status,
+        image: 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=400'
+      });
 
-    setSightings([newSighting, ...sightings]);
-    toast.success(`New sighting of ${species} near ${gate} added successfully`);
-    setShowAddDialog(false);
-    resetForm();
+      toast.success(`New sighting of ${species} near ${gate} added successfully`);
+      setShowAddDialog(false);
+      resetForm();
+    } catch (error) {
+      toast.error('Failed to add sighting: ' + error.message);
+    }
   };
 
   const handleEditSighting = (sighting) => {
@@ -103,33 +124,35 @@ export function KrugerStaffPortal() {
     setShowEditDialog(true);
   };
 
-  const handleUpdateSighting = () => {
+  const handleUpdateSighting = async () => {
     if (!currentSighting) return;
 
-    const updatedSightings = sightings.map(s =>
-      s.id === currentSighting.id
-        ? {
-            ...s,
-            species,
-            location,
-            gate,
-            count: parseInt(count),
-            confidence: parseInt(confidence),
-            status
-          }
-        : s
-    );
+    try {
+      await updateSighting(currentSighting.id, {
+        species,
+        location,
+        gate,
+        count: parseInt(count),
+        confidence: parseInt(confidence),
+        status
+      });
 
-    setSightings(updatedSightings);
-    toast.success('Sighting updated successfully');
-    setShowEditDialog(false);
-    setCurrentSighting(null);
-    resetForm();
+      toast.success('Sighting updated successfully');
+      setShowEditDialog(false);
+      setCurrentSighting(null);
+      resetForm();
+    } catch (error) {
+      toast.error('Failed to update sighting: ' + error.message);
+    }
   };
 
-  const handleDeleteSighting = (id) => {
-    setSightings(sightings.filter(s => s.id !== id));
-    toast.success('Sighting removed from system');
+  const handleDeleteSighting = async (id) => {
+    try {
+      await deleteSighting(id);
+      toast.success('Sighting removed from system');
+    } catch (error) {
+      toast.error('Failed to delete sighting: ' + error.message);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -151,6 +174,39 @@ export function KrugerStaffPortal() {
     ['African Lion', 'African Elephant', 'Leopard', 'Cape Buffalo', 'White Rhinoceros'].includes(s.species)
   ).length;
 
+  if (loading) {
+    return (
+      <div className="h-full overflow-auto bg-muted/30 p-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Loading animal sightings...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-full overflow-auto bg-muted/30 p-6">
+        <div className="max-w-7xl mx-auto">
+          <Card className="border-destructive">
+            <CardContent className="p-6 text-center">
+              <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Error Loading Data</h3>
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <Button onClick={refetch}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-auto bg-muted/30">
       <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -162,120 +218,126 @@ export function KrugerStaffPortal() {
               Manage wildlife sightings and tracking data
             </p>
           </div>
-          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-            <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto">
-                <Plus className="mr-2 h-4 w-4" />
-                Report Sighting
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Report New Animal Sighting</DialogTitle>
-                <DialogDescription>
-                  Add a new wildlife sighting to the tracking system
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="species">Species *</Label>
-                  <select 
-                    id="species"
-                    value={species} 
-                    onChange={(e) => setSpecies(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="">Select species</option>
-                    {speciesList.map((sp) => (
-                      <option key={sp} value={sp}>{sp}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="location">Location *</Label>
-                  <select 
-                    id="location"
-                    value={location} 
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="">Select location</option>
-                    {locations.map((loc) => (
-                      <option key={loc} value={loc}>{loc}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="gate">Gate *</Label>
-                  <select 
-                    id="gate"
-                    value={gate} 
-                    onChange={(e) => setGate(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="">Select nearest gate</option>
-                    {krugerGates.map((g) => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={refetch}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+              <DialogTrigger asChild>
+                <Button className="w-full sm:w-auto">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Report Sighting
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Report New Animal Sighting</DialogTitle>
+                  <DialogDescription>
+                    Add a new wildlife sighting to the tracking system
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="count">Animal Count</Label>
-                    <Input
-                      id="count"
-                      type="number"
-                      min="1"
-                      value={count}
-                      onChange={(e) => setCount(e.target.value)}
-                    />
+                    <Label htmlFor="species">Species *</Label>
+                    <select 
+                      id="species"
+                      value={species} 
+                      onChange={(e) => setSpecies(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <option value="">Select species</option>
+                      {speciesList.map((sp) => (
+                        <option key={sp} value={sp}>{sp}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="confidence">Confidence %</Label>
-                    <Input
-                      id="confidence"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={confidence}
-                      onChange={(e) => setConfidence(e.target.value)}
-                    />
+                    <Label htmlFor="location">Location *</Label>
+                    <select 
+                      id="location"
+                      value={location} 
+                      onChange={(e) => setLocation(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <option value="">Select location</option>
+                      {locations.map((loc) => (
+                        <option key={loc} value={loc}>{loc}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="gate">Gate *</Label>
+                    <select 
+                      id="gate"
+                      value={gate} 
+                      onChange={(e) => setGate(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <option value="">Select nearest gate</option>
+                      {krugerGates.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="count">Animal Count</Label>
+                      <Input
+                        id="count"
+                        type="number"
+                        min="1"
+                        value={count}
+                        onChange={(e) => setCount(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="confidence">Confidence %</Label>
+                      <Input
+                        id="confidence"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={confidence}
+                        onChange={(e) => setConfidence(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Sighting Status</Label>
+                    <select 
+                      id="status"
+                      value={status} 
+                      onChange={(e) => setStatus(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <option value="recent">Recent (Last Hour)</option>
+                      <option value="active">Active (Last 6 Hours)</option>
+                      <option value="historical">Historical (Older)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => {
+                      setShowAddDialog(false);
+                      resetForm();
+                    }}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddSighting}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Sighting
+                    </Button>
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="status">Sighting Status</Label>
-                  <select 
-                    id="status"
-                    value={status} 
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="recent">Recent (Last Hour)</option>
-                    <option value="active">Active (Last 6 Hours)</option>
-                    <option value="historical">Historical (Older)</option>
-                  </select>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button variant="outline" onClick={() => {
-                    setShowAddDialog(false);
-                    resetForm();
-                  }}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleAddSighting}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Sighting
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Stats Overview */}

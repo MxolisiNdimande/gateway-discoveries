@@ -5,37 +5,242 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
-import { Shield, Users, Binoculars } from 'lucide-react';
+import { Shield, Users, Binoculars, Loader2, Building, Trees } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Import your apiService
+import { apiService } from '../services/apiService';
 
 export function StaffLogin({ onLogin, onCancel }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState('admin');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (email && password) {
-      const role = activeTab === 'admin' ? 'admin' : 'kruger-staff';
-      toast.success(`Welcome ${role === 'admin' ? 'Administrator' : 'Kruger Staff'}`);
-      onLogin(role);
-    } else {
+    
+    if (!email || !password) {
       toast.error('Please enter your credentials');
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      const response = await apiService.login({ email, password });
+      
+      // Store token and user data in localStorage
+      localStorage.setItem('authToken', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      
+      // Determine the role for the frontend (mapping database role to frontend role)
+      const frontendRole = response.user.role === 'kruger_staff' ? 'kruger-staff' : response.user.role;
+      
+      toast.success(`Welcome ${response.user.name || (frontendRole === 'admin' ? 'Administrator' : 'Kruger Staff')}`);
+      onLogin(frontendRole);
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error('Login failed: Invalid email or password');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleDemoLogin = (role) => {
-    if (role === 'admin') {
-      setEmail('admin@gatewaydiscoveries.com');
-      setPassword('admin123');
-    } else {
-      setEmail('ranger@kruger.co.za');
-      setPassword('kruger123');
+  const handleDemoLogin = async (role) => {
+    const demoCredentials = role === 'admin' 
+      ? { email: 'admin@gatewaydiscoveries.com', password: 'admin123' }
+      : { email: 'ranger@kruger.co.za', password: 'kruger123' };
+
+    setEmail(demoCredentials.email);
+    setPassword(demoCredentials.password);
+    
+    setIsLoading(true);
+
+    try {
+      const response = await apiService.login(demoCredentials);
+      
+      // Store token and user data in localStorage
+      localStorage.setItem('authToken', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      
+      // Determine the role for the frontend
+      const frontendRole = response.user.role === 'kruger_staff' ? 'kruger-staff' : response.user.role;
+      
+      toast.success(`Welcome ${response.user.name || (frontendRole === 'admin' ? 'Administrator' : 'Kruger Staff')}`);
+      onLogin(frontendRole);
+    } catch (error) {
+      console.error('Demo login error:', error);
+      toast.error('Demo login failed. Please try manual login.');
+    } finally {
+      setIsLoading(false);
     }
-    setTimeout(() => {
-      toast.success(`Welcome ${role === 'admin' ? 'Administrator' : 'Kruger Staff'}`);
-      onLogin(role);
-    }, 300);
+  };
+
+  // Update the tab change to clear form
+  const handleTabChange = (value) => {
+    setActiveTab(value);
+    setEmail('');
+    setPassword('');
+  };
+
+  // Render the appropriate form based on activeTab
+  const renderLoginForm = () => {
+    if (activeTab === 'admin') {
+      return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-2">
+              <Building className="h-6 w-6 text-blue-600" />
+            </div>
+            <h3 className="font-semibold text-lg">Administrator Portal</h3>
+            <p className="text-sm text-muted-foreground">System management and analytics</p>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="admin-email" className="text-sm font-medium">Email Address</Label>
+              <Badge variant="outline" className="text-xs bg-blue-50">Administrator</Badge>
+            </div>
+            <Input
+              id="admin-email"
+              type="email"
+              placeholder="admin@gatewaydiscoveries.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="text-sm"
+              disabled={isLoading}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="admin-password" className="text-sm font-medium">Password</Label>
+            <Input
+              id="admin-password"
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="text-sm"
+              disabled={isLoading}
+            />
+          </div>
+          <div className="space-y-3">
+            <Button 
+              type="submit" 
+              className="w-full text-sm sm:text-base bg-blue-600 hover:bg-blue-700"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing In...
+                </>
+              ) : (
+                'Access Admin Portal'
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full text-sm sm:text-base border-blue-200 text-blue-700 hover:bg-blue-50"
+              onClick={() => handleDemoLogin('admin')}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                'Use Demo Admin Account'
+              )}
+            </Button>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+            <p className="text-xs text-blue-800 text-center">
+              <strong>Full system access</strong> • Content management • Analytics dashboard • User management
+            </p>
+          </div>
+        </form>
+      );
+    } else {
+      return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-2">
+              <Trees className="h-6 w-6 text-green-600" />
+            </div>
+            <h3 className="font-semibold text-lg">Ranger Portal</h3>
+            <p className="text-sm text-muted-foreground">Wildlife tracking and park management</p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="kruger-email" className="text-sm font-medium">Email Address</Label>
+              <Badge variant="secondary" className="text-xs bg-green-50 text-green-700">Park Ranger</Badge>
+            </div>
+            <Input
+              id="kruger-email"
+              type="email"
+              placeholder="ranger@kruger.co.za"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="text-sm"
+              disabled={isLoading}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="kruger-password" className="text-sm font-medium">Password</Label>
+            <Input
+              id="kruger-password"
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="text-sm"
+              disabled={isLoading}
+            />
+          </div>
+          <div className="space-y-3">
+            <Button 
+              type="submit" 
+              className="w-full text-sm sm:text-base bg-green-600 hover:bg-green-700"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing In...
+                </>
+              ) : (
+                'Access Ranger Portal'
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full text-sm sm:text-base border-green-200 text-green-700 hover:bg-green-50"
+              onClick={() => handleDemoLogin('kruger-staff')}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                'Use Demo Ranger Account'
+              )}
+            </Button>
+          </div>
+          <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+            <p className="text-xs text-green-800 text-center">
+              <strong>Wildlife management</strong> • Animal tracking • Sighting reports • Park operations
+            </p>
+          </div>
+        </form>
+      );
+    }
   };
 
   return (
@@ -49,144 +254,118 @@ export function StaffLogin({ onLogin, onCancel }) {
           <p className="text-sm sm:text-base text-muted-foreground">Gateway Discoveries - Mpumalanga</p>
         </div>
 
-        <Card>
-          <CardHeader className="p-4 sm:p-6">
+        <Card className="shadow-lg border-0">
+          <CardHeader className="p-4 sm:p-6 text-center">
             <CardTitle className="text-lg sm:text-xl">Select Access Level</CardTitle>
             <CardDescription className="text-sm">
-              Choose your role and sign in
+              Choose your role and sign in to the appropriate portal
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6 h-auto">
-                <TabsTrigger value="admin" className="text-xs sm:text-sm py-2">
-                  <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">System </span>Admin
-                </TabsTrigger>
-                <TabsTrigger value="kruger" className="text-xs sm:text-sm py-2">
-                  <Binoculars className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  Kruger Staff
-                </TabsTrigger>
-              </TabsList>
+            {/* Portal Selection Buttons */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <Button
+                variant={activeTab === 'admin' ? 'default' : 'outline'}
+                onClick={() => handleTabChange('admin')}
+                className={`text-sm h-12 ${activeTab === 'admin' ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                disabled={isLoading}
+              >
+                <Building className="h-4 w-4 mr-2" />
+                Admin Portal
+              </Button>
+              <Button
+                variant={activeTab === 'kruger' ? 'default' : 'outline'}
+                onClick={() => handleTabChange('kruger')}
+                className={`text-sm h-12 ${activeTab === 'kruger' ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                disabled={isLoading}
+              >
+                <Trees className="h-4 w-4 mr-2" />
+                Ranger Portal
+              </Button>
+            </div>
 
-              <TabsContent value="admin">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="admin-email" className="text-sm">Email Address</Label>
-                      <Badge variant="outline" className="text-xs">Administrator</Badge>
-                    </div>
-                    <Input
-                      id="admin-email"
-                      type="email"
-                      placeholder="admin@gatewaydiscoveries.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="admin-password" className="text-sm">Password</Label>
-                    <Input
-                      id="admin-password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Button type="submit" className="w-full text-sm sm:text-base">
-                      Sign In as Administrator
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full text-sm sm:text-base"
-                      onClick={() => handleDemoLogin('admin')}
-                    >
-                      Use Demo Admin Account
-                    </Button>
-                  </div>
-                  <p className="text-xs text-center text-muted-foreground">
-                    Full system access • Content management • Analytics
-                  </p>
-                </form>
-              </TabsContent>
+            {/* Dynamic Login Form */}
+            <div className="animate-in fade-in duration-300">
+              {renderLoginForm()}
+            </div>
 
-              <TabsContent value="kruger">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="kruger-email" className="text-sm">Email Address</Label>
-                      <Badge variant="secondary" className="text-xs">Kruger Staff</Badge>
-                    </div>
-                    <Input
-                      id="kruger-email"
-                      type="email"
-                      placeholder="ranger@kruger.co.za"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="kruger-password" className="text-sm">Password</Label>
-                    <Input
-                      id="kruger-password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Button type="submit" className="w-full text-sm sm:text-base">
-                      Sign In as Kruger Staff
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full text-sm sm:text-base"
-                      onClick={() => handleDemoLogin('kruger-staff')}
-                    >
-                      Use Demo Kruger Account
-                    </Button>
-                  </div>
-                  <p className="text-xs text-center text-muted-foreground">
-                    Animal tracking • Sighting reports • Park management
-                  </p>
-                </form>
-              </TabsContent>
-            </Tabs>
-
-            <div className="relative my-4 sm:my-6">
+            {/* Divider */}
+            <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or</span>
+                <span className="bg-card px-3 text-muted-foreground bg-white">Quick Access</span>
               </div>
             </div>
 
-            <Button variant="ghost" className="w-full text-sm" onClick={onCancel}>
-              Return to Public Portal
-            </Button>
+            {/* Quick Demo Login Buttons */}
+            <div className="space-y-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full text-sm border-blue-200 text-blue-700 hover:bg-blue-50"
+                onClick={() => {
+                  setActiveTab('admin');
+                  handleDemoLogin('admin');
+                }}
+                disabled={isLoading}
+              >
+                Quick Admin Demo
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full text-sm border-green-200 text-green-700 hover:bg-green-50"
+                onClick={() => {
+                  setActiveTab('kruger');
+                  handleDemoLogin('kruger-staff');
+                }}
+                disabled={isLoading}
+              >
+                Quick Ranger Demo
+              </Button>
+            </div>
+
+            <div className="mt-6">
+              <Button 
+                variant="ghost" 
+                className="w-full text-sm border" 
+                onClick={onCancel}
+                disabled={isLoading}
+              >
+                ← Return to Public Portal
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
-        <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-xs text-center text-muted-foreground">
-          <div className="bg-white/50 rounded-lg p-3">
-            <p className="mb-1">Admin Demo:</p>
-            <p className="font-mono text-xs">admin@gatewaydiscoveries.com</p>
-            <p className="font-mono text-xs">admin123</p>
-          </div>
-          <div className="bg-white/50 rounded-lg p-3">
-            <p className="mb-1">Kruger Demo:</p>
-            <p className="font-mono text-xs">ranger@kruger.co.za</p>
-            <p className="font-mono text-xs">kruger123</p>
+        {/* Demo Credentials */}
+        <div className="mt-6 space-y-4">
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border">
+            <h4 className="text-sm font-semibold text-center mb-3">Demo Credentials</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building className="h-3 w-3 text-blue-600" />
+                  <span className="font-semibold text-blue-800">Admin Portal</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-mono text-xs bg-white p-1 rounded border">admin@gatewaydiscoveries.com</p>
+                  <p className="font-mono text-xs bg-white p-1 rounded border">admin123</p>
+                </div>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Trees className="h-3 w-3 text-green-600" />
+                  <span className="font-semibold text-green-800">Ranger Portal</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-mono text-xs bg-white p-1 rounded border">ranger@kruger.co.za</p>
+                  <p className="font-mono text-xs bg-white p-1 rounded border">kruger123</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
